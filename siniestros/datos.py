@@ -23,8 +23,11 @@ def descargar(destino=None):
     for archivo in ARCHIVOS.values():
         req = urllib.request.Request(f"{BASE}/{archivo}", headers={"User-Agent": "analisis-siniestros-viales-ar"})
         with urllib.request.urlopen(req, timeout=120) as r:
-            (destino / archivo).write_bytes(r.read())
-        print(f"Descargado {archivo}")
+            contenido = r.read()
+        (destino / archivo).write_bytes(contenido)
+        # Se muestran las primeras líneas en el log para detectar cambios de formato en la fuente.
+        cabecera = contenido[:400].decode("utf-8", "replace").splitlines()[:3]
+        print(f"Descargado {archivo} ({len(contenido):,} bytes)", *cabecera, sep="\n  ")
 
 
 def _leer_csv(ruta):

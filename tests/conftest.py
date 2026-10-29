@@ -8,7 +8,7 @@ VEHICULOS = ["MOTO", "PEATON", "AUTO", "BICICLETA", "CARGAS", "PASAJEROS", "SD"]
 GRAVEDAD = ["LEVE", "GRAVE", "MORTAL", "SD"]
 
 
-def generar(carpeta, n=400, sep=",", encoding="utf-8", semilla=0):
+def generar(carpeta, n=400, sep=",", encoding="utf-8", semilla=0, formato="viejo"):
     rng = np.random.default_rng(semilla)
     fechas = pd.Timestamp("2019-01-01") + pd.to_timedelta(rng.integers(0, 365 * 5, n), unit="D")
     hechos = pd.DataFrame(
@@ -41,12 +41,52 @@ def generar(carpeta, n=400, sep=",", encoding="utf-8", semilla=0):
             "rol_victima": rng.choice(["CONDUCTOR", "PASAJERO_ACOMPAÑANTE", "PEATON", "CICLISTA"], n),
         }
     )
+    if formato == "nuevo":
+        hechos, victimas = _a_formato_nuevo(hechos, victimas)
     carpeta.mkdir(parents=True, exist_ok=True)
     hechos.to_csv(carpeta / "siniestros_viales_hechos.csv", index=False, sep=sep, encoding=encoding)
     victimas.to_csv(carpeta / "siniestros_viales_victimas.csv", index=False, sep=sep, encoding=encoding)
     return carpeta
 
 
-@pytest.fixture
-def datos_sinteticos(tmp_path):
+def _a_formato_nuevo(hechos, victimas):
+    """Esquema de la edición 2019-2025: columnas con sufijo _siniestro, fechas ISO y sexo en una letra."""
+    iso = lambda s: pd.to_datetime(s, format="%d/%m/%Y").dt.strftime("%Y-%m-%d")
+    mortales = (hechos["gravedad"] == "MORTAL").astype(int)
+    hechos = pd.DataFrame(
+        {
+            "id_siniestro": hechos["id_hecho"],
+            "numero_total_de_victimas": hechos["n_victimas"],
+            "numero_victimas_mortal_siniestro": mortales,
+            "fecha_siniestro": iso(hechos["fecha"]),
+            "anio_siniestro": hechos["aaaa"],
+            "hora_siniestro": hechos["hora"],
+            "comuna_siniestro": "COMUNA " + hechos["comuna"],
+            "tipo_de_via_siniestro": hechos["tipo_de_calle"],
+            "longitud_siniestro": hechos["longitud"],
+            "latitud_siniestro": hechos["latitud"],
+            "modo_desplazamiento_victima": hechos["victima"],
+            "modo_desplazamiento_acusado": hechos["contraparte"],
+        }
+    )
+    victimas = pd.DataFrame(
+        {
+            "id_siniestro": victimas["id_hecho"],
+            "fecha_siniestro": iso(victimas["fecha"]),
+            "anio_siniestro": victimas["aaaa"],
+            "modo_desplazamiento_victima": victimas["victima"],
+            "sexo_victima": victimas["sexo_victima"].replace({"MASCULINO": "M", "FEMENINO": "F"}),
+            "edad_victima": victimas["edad_victima"],
+            "GRAVEdad_victima": victimas["gravedad"],
+            "rol_victima": victimas["rol_victima"],
+            "fecha_fallecimiento_victima": "",
+        }
+    )
+    return hechos, victimas
+
+
+@pytest.fixture(params=["nuevo", "viejo"])
+def datos_sinteticos(tmp_path, request):
+    if request.param == "nuevo":
+        return generar(tmp_path / "data", sep=";", encoding="utf-8-sig", formato="nuevo")
     return generar(tmp_path / "data")

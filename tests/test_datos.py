@@ -2,7 +2,6 @@ import pandas as pd
 import pytest
 
 from siniestros.datos import cargar, es_mortal
-
 from tests.conftest import generar
 
 
@@ -31,6 +30,19 @@ def test_detecta_separador_y_encoding(tmp_path, sep, encoding):
     _, victimas = cargar(generar(tmp_path / "d", sep=sep, encoding=encoding))
     assert "rol_victima" in victimas
     assert victimas["rol_victima"].str.contains("ACOMPANANTE").any()  # sin tildes ni eñes
+
+
+def test_fechas_iso_no_confunden_dia_y_mes(tmp_path):
+    hechos, _ = cargar(generar(tmp_path / "d", formato="nuevo", sep=";"))
+    viejo, _ = cargar(generar(tmp_path / "v"))
+    assert (hechos.set_index("id_hecho")["fecha"] == viejo.set_index("id_hecho")["fecha"]).all()
+
+
+def test_formato_nuevo_normaliza_sexo_y_mortalidad(tmp_path):
+    hechos, victimas = cargar(generar(tmp_path / "d", formato="nuevo", sep=";"))
+    assert set(victimas["sexo_victima"].dropna()) <= {"MASCULINO", "FEMENINO"}
+    assert hechos["mortal"].any() and victimas["mortal"].any()
+    assert hechos["comuna"].dropna().between(1, 15).all()
 
 
 def test_es_mortal():
